@@ -13,9 +13,7 @@ class Ejdict(object):
         self._nvim = nvim
         self._con = sqlite3.connect(EJDICT_PATH)
         self._bufnr = self._nvim.call('bufadd', 'ejdict')
-
-        if not self._nvim.call('exists', 'ejdict#auto_start'):
-            self._nvim.vars['ejdict#auto_start'] = ['text']
+        self._nvim.command('augroup ejdict')
 
     def _search_verb(self, word):
         sql = 'SELECT word FROM verbs WHERE verb=? LIMIT 30'
@@ -31,7 +29,8 @@ class Ejdict(object):
         window = self._nvim.current.window
         winWidth = window.width
         winHeight = window.height
-        row, col = window.cursor
+        row = window.row
+        col = window.col
 
         width = min(winWidth, 100)
         height = min(winHeight, 10)
@@ -43,10 +42,33 @@ class Ejdict(object):
 
         return opts
 
-    @pynvim.command('Ejdict', nargs=1)
-    def search(self, args):
-        results = []
-        word = args[0].lower()
+    @pynvim.command('EjdictToggle')
+    def toggle(self):
+        if self._nvim.call('exists', 'b:ejdict_enable'):
+            del(self._nvim.current.buffer.vars['ejdict_enable'])
+            self._nvim.command('autocmd! ejdict * <buffer>')
+            self.clear()
+        else:
+            self._nvim.current.buffer.vars['ejdict_enable'] = 1
+            self._nvim.command('autocmd ejdict CursorMoved,BufEnter <buffer> EjdictSearch')
+            self._nvim.command('autocmd ejdict BufLeave <buffer> EjdictClear')
+            self.search()
+
+    @pynvim.command('EjdictClear')
+    def clear(self):
+        try:
+            for winid in self._nvim.call('win_findbuf', self._bufnr):
+                self._nvim.call('nvim_win_close', winid, False)
+        except Exception:
+            pass
+
+    @pynvim.command('EjdictSearch')
+    def search(self):
+        self.clear()
+        word = self._nvim.call('expand', '<cword>').lower()
+
+        if not word:
+            return
 
         for word in [word] + self._search_verb(word):
             results = self._search_word(word)
@@ -61,20 +83,3 @@ class Ejdict(object):
             self._nvim.call('nvim_open_win', self._bufnr, False, self._get_opts())
             self._nvim.options['ruler'] = False
 
-    @pynvim.command('EjdictCword')
-    def search_cword(self):
-        word = self._nvim.call('expand', '<cword>')
-        if word:
-            self.search([word])
-
-    @pynvim.autocmd('CursorMoved')
-    def cursor_moved(self):
-        try:
-            for winid in self._nvim.call('win_findbuf', self._bufnr):
-                self._nvim.call('nvim_win_close', winid, False)
-        except Exception:
-            pass
-
-        filetype = self._nvim.current.buffer.options['filetype']
-        if filetype in self._nvim.vars['ejdict#auto_start']:
-            self.search_cword()
