@@ -1,9 +1,5 @@
 import pynvim
-import sqlite3
-
-SOURCE = 'rplugin/python3/ejdict/__init__.py'
-TARGET = 'ejdic-hand-sqlite/ejdict.sqlite3'
-EJDICT_PATH = __file__.replace(SOURCE, TARGET)
+from .model import Model
 
 
 @pynvim.plugin
@@ -11,19 +7,9 @@ class Ejdict(object):
 
     def __init__(self, nvim: pynvim.Nvim):
         self._nvim = nvim
-        self._con = sqlite3.connect(EJDICT_PATH)
+        self._model = Model()
         self._bufnr = self._nvim.call('bufadd', 'ejdict')
         self._nvim.command('augroup ejdict')
-
-    def _search_verb(self, word):
-        sql = 'SELECT word FROM verbs WHERE verb=? LIMIT 30'
-        search = (word, )
-        return [x[0] for x in self._con.execute(sql, search)]
-
-    def _search_word(self, word):
-        sql = 'SELECT mean FROM items WHERE word=? LIMIT 30'
-        search = (word, )
-        return [x[0] for x in self._con.execute(sql, search)]
 
     def _get_opts(self):
         window = self._nvim.current.window
@@ -70,8 +56,8 @@ class Ejdict(object):
         if not word:
             return
 
-        for word in [word] + self._search_verb(word):
-            results = self._search_word(word)
+        for word in [word] + self._model.search_verb(word):
+            results = self._model.search_word(word)
 
             if not len(results):
                 continue
