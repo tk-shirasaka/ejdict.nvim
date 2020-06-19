@@ -68,4 +68,5 @@ class Ejdict(object):
             buffer[:] = results
             self._nvim.call('nvim_open_win', self._bufnr, False, self._get_opts())
             self._nvim.options['ruler'] = False
-
+            self._nvim.options['number'] = False
+            self._nvim.options['relativenumber'] = False
